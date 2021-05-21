@@ -23,42 +23,68 @@ def create_parser() -> argparse.ArgumentParser:
 
 
 def remove_finished_processes(plot_processes) -> None:
-    for index, process in enumerate(plot_processes):
+    still_running = list()
+    successes = 0
+    failures = 0
+    for process in plot_processes:
         return_code = process.poll()
-        if return_code is not None:
-            # A plotting process finished.
-            # Determine success or failure.
+        if return_code is None:
+            still_running.append(process)
+        else:
+            # A plotting process finished. Determine success or failure.
             if return_code == 0:
                 print("Plotting succeeded on pid {}".format(return_code))
+                successes += 1
             else:
                 print("Plotting failed on pid {} with return code {}".format(
-                    return_code, process.pid
+                    process.pid, return_code
                 ))
-            # Remove it from the list.
-            del plot_processes[index]
+                failures += 1
+    plot_processes[:] = still_running
+    return successes, failures
 
 
-def staggered_plotter(args, chia_args) -> None:
-    if args.concurrent_plots < 1:
-        print("concurrent_plots must be greater than 0")
-        return
+def staggered_plotter(
+        stagger_args,
+        chia_args,
+        poll_rate_seconds:float = 60.0,
+        ):
+    if stagger_args.concurrent_plots < 1:
+        print("concurrent_plots must be greater than 0, was {}".format(
+            stagger_args.concurrent_plots
+        ))
+        return 0, 0
+    total_successes = 0
+    total_failures = 0
     plot_processes = list()
-    for current_plot in range(args.total_plots):
+    for current_plot in range(stagger_args.total_plots):
         plot_processes.append(plot(chia_args))
         print("Starting plot {} of {} with pid {}".format(
             current_plot + 1,
-            args.total_plots,
+            stagger_args.total_plots,
             plot_processes[-1].pid,
         ))
-        minutes_already_slept = 0
-        while len(plot_processes) >= args.concurrent_plots:
-            remove_finished_processes(plot_processes)
-            time.sleep(60)  # Wait one minute between polling.
-            minutes_already_slept += 1
-        time.sleep((args.stagger_minutes - minutes_already_slept) * 60)
+        minutes_already_slept = 0.0
+        while len(plot_processes) >= stagger_args.concurrent_plots:
+            successes, failures = remove_finished_processes(plot_processes)
+            total_successes += successes
+            total_failures += failures
+            time.sleep(poll_rate_seconds)
+            minutes_already_slept += poll_rate_seconds / 60.0
+        minutes = (stagger_args.stagger_minutes - minutes_already_slept)
+        time.sleep(minutes * 60)
+    while len(plot_processes) > 0:
+        successes, failures = remove_finished_processes(plot_processes)
+        total_successes += successes
+        total_failures += failures
+        time.sleep(poll_rate_seconds)
+    return total_successes, total_failures
 
 
 if __name__ == "__main__":
     parser = create_parser()
-    args, chia_args = parser.parse_known_args()
-    staggered_plotter(args, chia_args)
+    stagger_args, chia_args = parser.parse_known_args()
+    successes, failures = staggered_plotter(stagger_args, chia_args)
+    print("Successfully plotted {} new plots. Failed {}.".format(
+        successes, failures
+    ))
