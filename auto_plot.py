@@ -75,7 +75,8 @@ def staggered_plotter(
             sleep(poll_rate_seconds)
             minutes_already_slept += poll_rate_seconds / 60.0
         minutes = (stagger_args.stagger_minutes - minutes_already_slept)
-        sleep(minutes * 60)
+        if current_plot + 1 < stagger_args.total_plots:
+            sleep(minutes * 60)
     while len(plot_processes) > 0:
         successes, failures = remove_finished_processes(plot_processes)
         total_successes += successes
