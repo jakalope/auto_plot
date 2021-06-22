@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 
 import argparse
-from subprocess import Popen
-import time
+from subprocess import Popen, DEVNULL
 
 
 def plot(chia_args) -> Popen:
     args = ["chia", "plots", "create"] + chia_args
-    return Popen(args)
+    return Popen(args, stdout=DEVNULL)
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -21,6 +20,10 @@ def create_parser() -> argparse.ArgumentParser:
             "plotting job after a previous job ends")
     return parser
 
+def sleep(seconds: float):
+    import time
+    seconds = max(0, seconds)
+    time.sleep(seconds)
 
 def remove_finished_processes(plot_processes) -> None:
     still_running = list()
@@ -69,15 +72,15 @@ def staggered_plotter(
             successes, failures = remove_finished_processes(plot_processes)
             total_successes += successes
             total_failures += failures
-            time.sleep(poll_rate_seconds)
+            sleep(poll_rate_seconds)
             minutes_already_slept += poll_rate_seconds / 60.0
         minutes = (stagger_args.stagger_minutes - minutes_already_slept)
-        time.sleep(minutes * 60)
+        sleep(minutes * 60)
     while len(plot_processes) > 0:
         successes, failures = remove_finished_processes(plot_processes)
         total_successes += successes
         total_failures += failures
-        time.sleep(poll_rate_seconds)
+        sleep(poll_rate_seconds)
     return total_successes, total_failures
 
 

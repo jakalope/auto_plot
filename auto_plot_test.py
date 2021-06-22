@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
 
+import time
 from unittest.mock import patch
 import unittest
 
 import auto_plot
 
 class FakePopen:
-    def __init__(self, return_code):
+    def __init__(self, return_code, sleep_on_poll=0):
         self.pid = 0
         self.return_code = return_code
+        self.sleep_on_poll = sleep_on_poll
 
     def poll(self) -> int:
         code = self.return_code[0]
         if len(self.return_code) > 1:
             del self.return_code[0]
+            time.sleep(self.sleep_on_poll)
         return code
 
 class RemoveFinishedProcessesTest(unittest.TestCase):
@@ -137,6 +140,21 @@ class StaggeredPlotterTest(unittest.TestCase):
             stagger_args, [], poll_rate_seconds = 0
         )
         self.assertEqual(successes, 2)
+        self.assertEqual(failures, 0)
+
+    @patch("auto_plot.plot")
+    def test_negative_sleep(self, mock_plot) -> None:
+        mock_plot.side_effect = [ FakePopen([None]*5 + [0], 0.5) ] * 9
+        parser = auto_plot.create_parser()
+        stagger_args = parser.parse_args([
+            "--concurrent_plots=3",
+            "--total_plots=9",
+            "--stagger_minutes=-10",
+        ])
+        successes, failures = auto_plot.staggered_plotter(
+            stagger_args, [], poll_rate_seconds = 0
+        )
+        self.assertEqual(successes, 9)
         self.assertEqual(failures, 0)
 
 
