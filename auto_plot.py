@@ -36,7 +36,7 @@ def remove_finished_processes(plot_processes) -> None:
         else:
             # A plotting process finished. Determine success or failure.
             if return_code == 0:
-                print("Plotting succeeded on pid {}".format(return_code))
+                print("Plotting succeeded on pid {}".format(process.pid))
                 successes += 1
             else:
                 print("Plotting failed on pid {} with return code {}".format(
